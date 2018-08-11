@@ -1,0 +1,265 @@
+<html>
+
+<head>
+    <title>Dog breed identification</title>
+</head>
+
+<body>
+    <img src="./dataset/images/validation/bluetick/0dcb8150908bbb7b7fff1b9d41a358ba.jpg" id="image" width=299 height=299/>
+    <div id="file-container">
+        Upload an image: <input type="file" id="files" name="files[]" multiple />
+    </div>
+    <br/>
+    <span id="status"></span>
+    <br/>
+    <textarea id="result" rows="30" cols="50">
+    </textarea>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/0.12.4/tf.js">
+    </script>
+
+    <script>
+        async function DogBreed() {
+            const IMAGE_SIZE = [299, 299];
+            const filesElement = document.getElementById('files');
+
+            const CLASSES = [
+                'affenpinscher',
+                'afghan_hound',
+                'african_hunting_dog',
+                'airedale',
+                'american_staffordshire_terrier',
+                'appenzeller',
+                'australian_terrier',
+                'basenji',
+                'basset',
+                'beagle',
+                'bedlington_terrier',
+                'bernese_mountain_dog',
+                'black-and-tan_coonhound',
+                'blenheim_spaniel',
+                'bloodhound',
+                'bluetick',
+                'border_collie',
+                'border_terrier',
+                'borzoi',
+                'boston_bull',
+                'bouvier_des_flandres',
+                'boxer',
+                'brabancon_griffon',
+                'briard',
+                'brittany_spaniel',
+                'bull_mastiff',
+                'cairn',
+                'cardigan',
+                'cat',
+                'chesapeake_bay_retriever',
+                'chihuahua',
+                'chow',
+                'clumber',
+                'cocker_spaniel',
+                'collie',
+                'curly-coated_retriever',
+                'dandie_dinmont',
+                'dhole',
+                'dingo',
+                'doberman',
+                'english_foxhound',
+                'english_setter',
+                'english_springer',
+                'entlebucher',
+                'eskimo_dog',
+                'flat-coated_retriever',
+                'french_bulldog',
+                'german_shepherd',
+                'german_short-haired_pointer',
+                'giant_schnauzer',
+                'golden_retriever',
+                'gordon_setter',
+                'great_dane',
+                'great_pyrenees',
+                'greater_swiss_mountain_dog',
+                'groenendael',
+                'ibizan_hound',
+                'irish_setter',
+                'irish_terrier',
+                'irish_water_spaniel',
+                'irish_wolfhound',
+                'italian_greyhound',
+                'japanese_spaniel',
+                'keeshond',
+                'kelpie',
+                'kerry_blue_terrier',
+                'komondor',
+                'kuvasz',
+                'labrador_retriever',
+                'lakeland_terrier',
+                'leonberg',
+                'lhasa',
+                'malamute',
+                'malinois',
+                'maltese_dog',
+                'mexican_hairless',
+                'miniature_pinscher',
+                'miniature_poodle',
+                'miniature_schnauzer',
+                'newfoundland',
+                'no_dog',
+                'norfolk_terrier',
+                'norwegian_elkhound',
+                'norwich_terrier',
+                'old_english_sheepdog',
+                'otterhound',
+                'papillon',
+                'pekinese',
+                'pembroke',
+                'pomeranian',
+                'pug',
+                'redbone',
+                'rhodesian_ridgeback',
+                'rottweiler',
+                'saint_bernard',
+                'saluki',
+                'samoyed',
+                'schipperke',
+                'scotch_terrier',
+                'scottish_deerhound',
+                'sealyham_terrier',
+                'shetland_sheepdog',
+                'shih-tzu',
+                'siberian_husky',
+                'silky_terrier',
+                'soft-coated_wheaten_terrier',
+                'staffordshire_bullterrier',
+                'standard_poodle',
+                'standard_schnauzer',
+                'sussex_spaniel',
+                'tibetan_mastiff',
+                'tibetan_terrier',
+                'toy_poodle',
+                'toy_terrier',
+                'vizsla',
+                'walker_hound',
+                'weimaraner',
+                'welsh_springer_spaniel',
+                'west_highland_white_terrier',
+                'whippet',
+                'wire-haired_fox_terrier',
+                'yorkshire_terrier'
+            ];
+
+            async function getModel() {
+                const model = await tf.loadModel('/js_model_xcept/model.json');
+                return model
+            }
+
+            function setStatus(msg) {
+                document.getElementById('status').innerHTML = msg;
+            }
+
+            // TODO display loading status
+            setStatus('Loading model');
+            const model = await getModel();
+            window.model = model;
+            setStatus('Woof woof!');
+
+            async function predict(imgElement) {
+                const logits = tf.tidy(() => {
+                    const img = tf.fromPixels(imgElement).toFloat();
+
+                    const offset = tf.scalar(127.5);
+                    const normalized = img.sub(offset).div(offset);
+                    const batched = normalized.reshape(
+                        [1, IMAGE_SIZE[1], IMAGE_SIZE[0], 3]);
+
+                    return model.predict(batched);
+                });
+                return logits;
+            }
+
+            async function getTopKClasses(logits, topK) {
+                const values = await logits.data();
+
+                const valuesAndIndices = [];
+                for (let i = 0; i < values.length; i++) {
+                    valuesAndIndices.push({
+                        value: values[i],
+                        index: i
+                    });
+                }
+                valuesAndIndices.sort((a, b) => {
+                    return b.value - a.value;
+                });
+                const topkValues = new Float32Array(topK);
+                const topkIndices = new Int32Array(topK);
+                for (let i = 0; i < topK; i++) {
+                    topkValues[i] = valuesAndIndices[i].value;
+                    topkIndices[i] = valuesAndIndices[i].index;
+                }
+
+                const topClassesAndProbs = [];
+                for (let i = 0; i < topkIndices.length; i++) {
+                    topClassesAndProbs.push({
+                        className: CLASSES[topkIndices[i]],
+                        probability: topkValues[i]
+                    })
+                }
+                return topClassesAndProbs;
+            }
+
+            function prettyName(name) {
+                return name.replace('_', ' ').replace(
+                    /\w\S*/g,
+                    function(txt) {
+                        return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+                    }
+                );
+            }
+
+            async function get_prediction(imgElement) {
+                const logist = await predict(imgElement);
+                const result = await (getTopKClasses(logist, 5));
+                document.getElementById('result').value = JSON.stringify(
+                    result, null, 2);
+                if (result && result.length > 0) {
+                    const top = result[0];
+                    if (top.className === 'cat') {
+                        setStatus('Are you kitten me???')
+                    } else if (top.className === 'no_dog' || top.probability < 0.4) {
+                        setStatus('I could not found any dog');
+                    } else if (top.probability < 0.5) {
+                        setStatus('It does not look like a dog but if it a dog it will be a ' + top.className);
+                    } else {
+                        setStatus(prettyName(top.className));
+                    }
+                }
+            }
+
+            await get_prediction(document.getElementById('image'));
+
+            filesElement.addEventListener('change', evt => {
+                let files = evt.target.files;
+                for (let i = 0, f; f = files[i]; i++) {
+                    setStatus('Let see what this is');
+                    if (!f.type.match('image.*')) {
+                        continue;
+                    }
+                    let reader = new FileReader();
+                    const idx = i;
+                    reader.onload = e => {
+                        let img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.width = IMAGE_SIZE[0];
+                        img.height = IMAGE_SIZE[1];
+                        img.onload = () => get_prediction(img);
+                        document.getElementById('image').src = img.src;
+                    };
+                    reader.readAsDataURL(f);
+                }
+            });
+        }
+
+        DogBreed();
+    </script>
+</body>
+
+</html>
